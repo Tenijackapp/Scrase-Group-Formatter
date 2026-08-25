@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scrase Group Estimate Formatter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  /* Scrase Group palette - charcoal / stone / brass */
+  --ink:#3A3A3A;          /* logo charcoal - primary dark */
+  --ink-2:#2B2B2B;
+  --steel:#6A6A6A;
+  --brass:#8A6D3B;        /* quiet brand accent */
+  --brass-dark:#6E5528;
+  --sand:#EFECE6;         /* warm stone background */
+  --line:#DAD5CC;
+  --line-soft:#E7E3DB;
+  --paper:#F4F2ED;
+  --card:#FFFFFF;
+  --ok:#4F7A4F;   --ok-bg:#EAF2E4;
+  --warn:#9A6B12; --warn-bg:#FBF1DE;
+  --err:#C0392B;  --err-bg:#FBECEA;
+  --action:#2C6E9B;
+  --radius:8px;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --body:'Inter',system-ui,sans-serif;
+  --display:'Archivo',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--body);background:var(--paper);color:var(--ink);font-size:14px;line-height:1.45}
+:focus-visible{outline:3px solid var(--action);outline-offset:1px}
+
+/* header - charcoal bar with Scrase wordmark */
+header{background:var(--ink);color:#F4F1EA;padding:16px 24px 14px;position:relative;display:flex;align-items:center;gap:18px}
+.brand{display:flex;align-items:baseline;gap:9px;letter-spacing:.14em;flex:none}
+.brand .b1{font-family:var(--display);font-weight:800;font-size:22px}
+.brand .b2{font-family:var(--display);font-weight:400;font-size:22px;opacity:.82}
+.h-text{display:flex;flex-direction:column;gap:2px;border-left:1px solid rgba(255,255,255,.18);padding-left:18px}
+.h-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:.4px;text-transform:uppercase;color:#F4F1EA}
+.h-sub{color:#C9C2B8;font-size:12.5px}
+.h-tag{margin-left:auto;font-size:11px;letter-spacing:.22em;opacity:.5;text-transform:uppercase}
+header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--brass)}
+
+main{display:block;padding:18px 22px;max-width:1700px;margin:0 auto}
+.toprow{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+@media(max-width:980px){.toprow{grid-template-columns:1fr}}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.card h2{font-family:var(--display);font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.step{display:inline-flex;align-items:center;justify-content:center;background:var(--ink);color:var(--brass);font-family:var(--display);font-weight:700;width:22px;height:22px;border-radius:5px;font-size:13px}
+
+label{display:block;font-weight:600;font-size:12px;margin:10px 0 4px;color:var(--steel);text-transform:uppercase;letter-spacing:.4px}
+select,textarea,input[type=file]{width:100%;font-family:var(--body);font-size:14px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:#fff;color:var(--ink)}
+textarea{font-family:var(--mono);font-size:12.5px;min-height:220px;resize:vertical;white-space:pre}
+select:hover,textarea:hover{border-color:var(--steel)}
+
+.btn{font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.5px;text-transform:uppercase;border:none;border-radius:6px;padding:10px 16px;cursor:pointer;transition:filter .12s}
+.btn:hover{filter:brightness(.94)}
+.btn-primary{background:var(--ink);color:#F4F1EA;width:100%;margin-top:14px;padding:12px}
+.btn-primary:hover{background:#000}
+.btn-small{background:#ECE8E1;color:var(--ink);padding:7px 12px;font-size:12.5px}
+.btn-fix{background:var(--brass);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.spacer{flex:1}
+
+.inspect{margin-top:14px}
+#checks{max-height:520px;overflow-y:auto;padding-right:6px}
+#checks::-webkit-scrollbar{width:9px}
+#checks::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+.checkcount{position:sticky;top:0;background:#fff;display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 10px;margin-bottom:4px;border-bottom:1px solid var(--line);z-index:2}
+.cc{font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px}
+.cc-err{background:#FDE7E4;color:#A6301F}
+.cc-rev{background:#F7EBCF;color:#7A5400}
+.cc-fix{background:#EDE7DA;color:var(--brass-dark)}
+.rowfilter{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--steel);cursor:pointer;margin-left:12px;user-select:none}
+.check{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-left:4px solid var(--line);background:#FBFAF7;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:13px}
+.check .stamp{font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:.8px;text-transform:uppercase;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.check.pass{border-left-color:var(--ok)} .check.pass .stamp{background:var(--ok-bg);color:var(--ok)}
+.check.fixed{border-left-color:var(--brass)} .check.fixed .stamp{background:#EFE7D6;color:var(--brass-dark)}
+.check.review{border-left-color:var(--warn)} .check.review .stamp{background:var(--warn-bg);color:var(--warn)}
+.check.error{border-left-color:var(--err)} .check.error .stamp{background:var(--err-bg);color:var(--err)}
+.check .msg{flex:1}
+
+.tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:6px;max-height:62vh;background:#fff}
+table{border-collapse:collapse;font-family:var(--mono);font-size:12.5px;min-width:100%}
+th{font-family:var(--display);font-size:12px;letter-spacing:.5px;text-transform:uppercase;background:var(--ink);color:#fff;padding:7px 10px;text-align:left;position:sticky;top:0;z-index:2;white-space:nowrap}
+th.req::after{content:" *";color:var(--brass)}
+td{border-bottom:1px solid #EEEFEA;border-right:1px solid #F3F4F0;padding:5px 9px;white-space:nowrap;max-width:520px;overflow:hidden;text-overflow:ellipsis}
+td.rownum{color:var(--steel);background:#FAFAF7;font-size:11px;text-align:right;position:sticky;left:0}
+tr:hover td{background:#FCFBF6}
+td.c-fixed{background:#F7F1E4;box-shadow:inset 3px 0 0 var(--brass)}
+td.c-review{background:var(--warn-bg);box-shadow:inset 3px 0 0 var(--warn)}
+td.c-error{background:var(--err);color:#fff;font-weight:600}
+td.c-error .was{color:#FFD9D1}
+td[contenteditable]:focus{outline:2px solid var(--action);background:#fff}
+td.c-error[contenteditable]:focus{background:#fff;color:#111}
+tr.heading-row td{background:#F7EBCF;font-weight:600}
+tr.heading-row td.c-error{background:var(--err);color:#fff}
+.pager{display:flex;align-items:center;gap:10px;padding:8px 4px;font-size:13px;color:var(--steel)}
+.pager .pgnum{font-family:var(--display);font-weight:600;color:var(--ink)}
+.tbl-scroll{overflow:auto;max-height:60vh}
+.delrow{border:none;background:var(--err);color:#fff;border-radius:4px;width:16px;height:16px;font-size:10px;line-height:1;cursor:pointer;margin-left:4px;padding:0}
+td .was{display:block;color:var(--steel);font-size:10.5px;text-decoration:line-through}
+
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:#ECE8E1;color:var(--steel)}
+.pill.on{background:var(--ok-bg);color:var(--ok)}
+.summary{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+.sum{font-family:var(--display);font-weight:600;font-size:13px;padding:6px 12px;border-radius:6px;letter-spacing:.4px}
+.sum.fixed{background:#EFE7D6;color:var(--brass-dark)}
+.sum.review{background:var(--warn-bg);color:var(--warn)}
+.sum.error{background:var(--err-bg);color:var(--err)}
+.sum.pass{background:var(--ok-bg);color:var(--ok)}
+
+.empty{color:var(--steel);text-align:center;padding:60px 20px;font-size:14px}
+.empty b{font-family:var(--display);text-transform:uppercase;letter-spacing:.5px;display:block;font-size:16px;margin-bottom:6px;color:var(--ink)}
+
+.phasebar{display:none;align-items:center;gap:12px;background:var(--warn-bg);border:1px solid #EAD9B0;border-radius:6px;padding:10px 12px;margin-bottom:10px}
+.phasebar.show{display:flex}
+.phasebar.info{background:#EDE7DA;border-color:#D8CCB0}
+.phasebar.info b{color:var(--brass-dark)}
+.phasebar b{color:var(--warn)}
+
+.footnote{color:var(--steel);font-size:12px;margin-top:10px}
+kbd{font-family:var(--mono);background:#ECE8E1;border-radius:4px;padding:1px 5px;font-size:11px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:6px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="b1">SCRASE</span><span class="b2">GROUP</span></div>
+  <div class="h-text">
+    <div class="h-row"><h1>Estimate Formatter</h1></div>
+    <span class="h-sub">Reformats the <b>Updated Estimate</b> sheet into the JACK App <b>costings-estimate</b> import layout. Estimates only. <span style="opacity:.7">(build 1)</span></span>
+  </div>
+  <span class="h-tag">JACK Costings Import</span>
+</header>
+
+<main>
+  <div class="toprow">
+    <!-- input -->
+    <section class="card" aria-label="Input">
+      <h2><span class="step">1</span> Load your estimate</h2>
+      <div style="font-size:12px;color:var(--steel);margin:2px 0 2px">Drop a Scrase estimate workbook, or paste the <b>Updated Estimate</b> sheet straight from Excel (headers in the first row). Everything runs in your browser; nothing is uploaded.</div>
+      <div style="margin:8px 0 2px">
+        <label for="catcase">Cost_Category casing</label>
+        <select id="catcase">
+          <option value="proper">Proper Case (Preliminaries &amp; Approvals)</option>
+          <option value="upper">UPPERCASE (PRELIMINARIES &amp; APPROVALS)</option>
+          <option value="keep">Keep as-is (strip code only)</option>
+        </select>
+      </div>
+      <label for="src">Data (copy from Excel, headers included)</label>
+      <textarea id="src" spellcheck="false" placeholder="Paste the Updated Estimate rows here, e.g.
+
+Item	Cost_Category	Cost_Group	Type	Qty	UOM	...	Unit Cost Ex. Tax	...
+Preliminary Design Drawings	01 - Preliminaries & Approvals	01-001	Fee	1	Quoted	...	5000	..."></textarea>
+      <div style="margin-top:8px">
+        <label for="file">Or open an Excel file</label>
+        <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt">
+        <div id="sheetrow" style="display:none;margin-top:6px">
+          <label for="sheet">Worksheet to format</label>
+          <select id="sheet"></select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:2px">
+        <button class="btn btn-primary" id="run" style="flex:1">Check and format</button>
+        <button class="btn btn-small" id="reset" title="Clear everything and start fresh">Load another</button>
+      </div>
+    </section>
+
+    <!-- inspection -->
+    <section class="card" aria-label="Inspection">
+      <div class="inspect">
+        <h2><span class="step">2</span> Inspection card</h2>
+        <div id="checks"><div class="footnote">Run a check to see results here. Fixed = corrected automatically. Review = look at it yourself. Error = must be resolved before import.</div></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- output -->
+  <section class="card" aria-label="Results">
+    <h2><span class="step">3</span> Formatted output</h2>
+    <div class="summary" id="summary"></div>
+
+    <div class="phasebar" id="specbar">
+      <span>⚠ <b id="speccount"></b> row(s) have an <b>Allowance $</b> amount but UOM isn't "Allowance". Confirm whether Specification should read "Allowance".</span>
+      <button class="btn btn-small btn-fix" id="setallow">Set those to Allowance</button>
+    </div>
+    <div class="phasebar" id="headingbar">
+      <span>⚠ <b id="headingcount"></b> row(s) flagged as <b>section headings / separators</b>. Nothing is deleted automatically - review, then remove if needed.</span>
+      <button class="btn btn-small" id="delheadings">Delete all flagged</button>
+    </div>
+    <div class="phasebar" id="uombar">
+      <span>⚠ <b id="uomcount"></b> row(s) have a <b>numeric UOM</b> - a price likely landed in the UOM column.</span>
+      <button class="btn btn-small btn-fix" id="moveuom">Move them to Price_Each</button>
+    </div>
+    <div class="phasebar" id="pricebar">
+      <span>⚠ <b id="pricecount"></b> row(s) had <b>no Price_Each</b> (no Unit Cost Ex. Tax in source) - defaulted to <b>0.00</b>. Check and update these before importing.</span>
+    </div>
+
+    <div class="toolbar">
+      <span class="pill" id="tplpill">Scrase estimate</span>
+      <label class="rowfilter" id="rowfilterwrap" style="display:none"><input type="checkbox" id="rowfilter"> Show only rows to review/fix</label>
+      <span class="spacer"></span>
+      <button class="btn btn-small" id="xlsx" disabled>Download Excel</button>
+    </div>
+    <div class="tbl-wrap" id="tblwrap">
+      <div class="empty"><b>Nothing checked yet</b>Load your estimate above and hit Check and Format.<br>Result cells are editable. Changed cells show the old value crossed out.</div>
+    </div>
+    <p class="footnote">Highlight legend: brass = fixed automatically, amber = please review, red = blocking error. Edit any cell directly, then download. Cost_Group and Markup stay blank (markup is set globally in JACK).</p>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= SCRASE ESTIMATE FORMATTER =================
+   Source sheet "Updated Estimate" -> JACK "Formatting" (costings-estimate) layout.
+   Rules derived from Scrase samples (Oakmont Crescent, Shenton Road):
+     Cost_Group  -> blank
+     Cost_Category -> strip leading "NN - " code
+     Item        -> "<Cost_Group code> - <Item text>"
+     Specification -> "Allowance" when source UOM == Allowance
+     Type        -> Fee/Other -> Mat_Lab; others carry through
+     Qty         -> number (3dp)
+     UOM         -> lowercased + normalised
+     Price_Each  -> Unit Cost Ex. Tax (2dp)
+     Markup      -> blank
+   Philosophy: only change what the rule says; flag, don't guess.
+============================================================= */
+const OUT_COLS=["Cost_Group","Cost_Category","Item","Specification","Type","Qty","UOM","Price_Each","Markup"];
+const REQUIRED=["Cost_Category","Item"];
+
+const TYPE_MAP={fee:"Mat_Lab",other:"Mat_Lab",material:"Material",labour:"Labour",labor:"Labour",equipment:"Equipment",subcontractor:"Subcontractor","mat_lab":"Mat_Lab"};
+const UOM_MAP={
+  quoted:"quote",quote:"quote",fee:"fee",allowance:"$",
+  hours:"hour",hour:"hour",hr:"hour",hrs:"hour",
+  weeks:"week",week:"week",wk:"week",wks:"week",
+  days:"day",day:"day",
+  lm:"lm","lineal metre":"lm","lineal metres":"lm","linear metre":"lm","linear metres":"lm","l/m":"lm",
+  m2:"m2",sqm:"m2","sq m":"m2","square metre":"m2","square metres":"m2",
+  m3:"m3",cum:"m3","cubic metre":"m3","cubic metres":"m3",
+  each:"ea",ea:"ea","ea.":"ea",no:"ea","no.":"ea",number:"ea",nr:"ea",item:"item",unit:"ea",units:"ea",
+  t:"tonne",tonne:"tonne",tonnes:"tonne",ton:"tonne",kg:"kg",l:"litre",litre:"litre",
+  min:"minute",mo:"month",month:"month",qtr:"quarter",yr:"year",year:"year",
+  sheet:"sheet",bag:"bag",roll:"roll",box:"box",pack:"pack",job:"job",sum:"sum",ls:"sum"
+};
+
+/* ---------- helpers ---------- */
+function toAscii(s){
+  if(s==null) return "";
+  let v=String(s)
+    .replace(/[\u2018\u2019\u02BC]/g,"'").replace(/[\u201C\u201D]/g,'"')
+    .replace(/[\u2013\u2014\u2015]/g,"-").replace(/\u2026/g,"...")
+    .replace(/\u00B0/g,"").replace(/\u00B2/g,"2").replace(/\u00B3/g,"3").replace(/\u00D7/g,"x")
+    .replace(/\|/g," ")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^\x20-\x7E]/g,"")
+    .replace(/\s{2,}/g," ").trim();
+  return v;
+}
+function stripCode(cat){ return String(cat==null?"":cat).replace(/^\s*\d{1,3}\s*[-\u2013]\s*/,"").trim(); }
+function num(v){ if(v===""||v==null) return null; if(typeof v==="number") return v; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?null:n; }
+const normH=h=>String(h==null?"":h).toLowerCase().replace(/[^a-z0-9]/g,"");
+
+function properCat(s){
+  const LOWER=new Set(["a","an","and","as","at","by","for","of","on","or","the","to","with","per","&"]);
+  /* trade set-phrases keep their exact casing (each word capitalised, even "in"/"off"/"up") */
+  const PHRASES=[[/\brough-in\b/ig,"Rough-In"],[/\bfit-off\b/ig,"Fit-Off"]];
+  const parts=s.split(/(\s+|\/|-|,)/);
+  const lastIdx=(()=>{for(let i=parts.length-1;i>=0;i--){if(!/^(\s+|\/|-|,)$/.test(parts[i])&&parts[i]!=="")return i;}return -1;})();
+  let out=parts.map((w,i)=>{
+    if(/^(\s+|\/|-|,)$/.test(w)||w==="") return w;
+    const bare=w.replace(/[^A-Za-z0-9&]/g,"");
+    if(!bare) return w;
+    if(/[A-Za-z]/.test(bare)&&/[0-9]/.test(bare)) return w;
+    const low=w.toLowerCase();
+    if(i>0 && i!==lastIdx && LOWER.has(low)) return low;
+    return low.charAt(0).toUpperCase()+low.slice(1);
+  }).join("");
+  /* re-apply trade phrases (they may have been split across hyphens above) */
+  PHRASES.forEach(([re,good])=>{ out=out.replace(re,good); });
+  return out;
+}
+
+/* ---------- header resolver ---------- */
+function buildIndex(header){
+  const idx={};
+  header.forEach((h,i)=>{ const k=normH(h); if(!(k in idx)) idx[k]=i; });
+  const pick=(...keys)=>{ for(const k of keys){ if(k in idx) return idx[k]; } return -1; };
+  return {
+    item:      pick("item","description"),
+    category:  pick("costcategory","categorydescription","category"),
+    group:     pick("costgroup","code"),
+    type:      pick("type"),
+    qty:       pick("qty","quantity"),
+    uom:       pick("uom","unit","units"),
+    allowance: pick("allowance"),
+    unitcost:  pick("unitcostextax","unitcostexgst","unitcost","priceeach","rate")
+  };
+}
+
+/* ---------- core transform ----------
+   returns {rows:[{col:val}], flags:{"ri_col":level}, issues:[{row,col,level,msg}],
+            origin:{"ri_ci":oldVal}, dropped, headingRows, specSuspect, priceMissing} */
+function formatRows(aoa, catCase){
+  const header=aoa[0]||[];
+  const ix=buildIndex(header);
+  const issues=[]; const flags={}; const origin={};
+  if(ix.item<0 || ix.category<0){
+    throw new Error("Couldn't find the Item and Cost_Category columns. Make sure the Updated Estimate sheet's headers are in the first row.");
+  }
+  const colIx=c=>OUT_COLS.indexOf(c);
+  const rows=[]; let dropped=0; const headingRows=[]; const specSuspect=[]; const priceMissing=[];
+  const rawUnitCostFound = ix.unitcost>=0;
+
+  for(let r=1;r<aoa.length;r++){
+    const row=aoa[r]||[];
+    const get=i=>(i>=0 && row[i]!=null)?String(row[i]):"";
+    const rawItem=get(ix.item).trim();
+    const rawCat=get(ix.category).trim();
+
+    if(!rawCat){ if(rawItem) dropped++; continue; }        /* section heading in source -> drop */
+    if(!rawItem && !rawCat){ dropped++; continue; }
+
+    const ri=rows.length;
+    const rec={Cost_Group:"",Cost_Category:"",Item:"",Specification:"",Type:"",Qty:null,UOM:"",Price_Each:null,Markup:""};
+
+    /* Cost_Category */
+    let catOut=toAscii(stripCode(rawCat));
+    if(catCase==="proper") catOut=properCat(catOut);
+    else if(catCase==="upper") catOut=catOut.toUpperCase();
+    rec.Cost_Category=catOut;
+    if(catOut!==rawCat){ origin[ri+"_"+colIx("Cost_Category")]=rawCat; flags[ri+"_"+colIx("Cost_Category")]="fixed";
+      issues.push({row:ri,col:colIx("Cost_Category"),level:"fixed",msg:"Cost_Category (row "+(ri+1)+"): stripped code / cased"}); }
+
+    /* Item = "<code> - <item>" */
+    const code=toAscii(get(ix.group).trim());
+    const itemText=toAscii(rawItem);
+    rec.Item = code ? (code+" - "+itemText) : itemText;
+    if(rec.Item!==rawItem){ origin[ri+"_"+colIx("Item")]=rawItem; flags[ri+"_"+colIx("Item")]="fixed";
+      issues.push({row:ri,col:colIx("Item"),level:"fixed",msg:"Item (row "+(ri+1)+"): "+(code?"prefixed cost code":"cleaned")}); }
+
+    /* Type */
+    const rawType=get(ix.type).trim();
+    const mapped=TYPE_MAP[rawType.toLowerCase()];
+    if(mapped){ rec.Type=mapped;
+      if(mapped!==rawType){ origin[ri+"_"+colIx("Type")]=rawType; flags[ri+"_"+colIx("Type")]="fixed";
+        issues.push({row:ri,col:colIx("Type"),level:"fixed",msg:'Type (row '+(ri+1)+'): "'+rawType+'" -> "'+mapped+'"'}); }
+    } else {
+      rec.Type=rawType;
+      if(rawType){ flags[ri+"_"+colIx("Type")]="review";
+        issues.push({row:ri,col:colIx("Type"),level:"review",msg:'Type (row '+(ri+1)+'): unrecognised "'+rawType+'" carried through - verify'}); }
+    }
+
+    /* UOM */
+    const rawUom=get(ix.uom).trim();
+    const uLow=rawUom.toLowerCase();
+    if(rawUom===""){ rec.UOM=""; }
+    else if(/^[0-9.,$\s]+$/.test(rawUom)){
+      rec.UOM=rawUom; flags[ri+"_"+colIx("UOM")]="error";
+      issues.push({row:ri,col:colIx("UOM"),level:"error",msg:'UOM (row '+(ri+1)+'): "'+rawUom+'" is a number, not a unit - a price may have landed here'});
+    } else {
+      const mappedU=UOM_MAP[uLow]||UOM_MAP[uLow.replace(/^\/|^per\s+/,"")];
+      if(mappedU){ rec.UOM=mappedU;
+        if(mappedU!==rawUom){ origin[ri+"_"+colIx("UOM")]=rawUom; flags[ri+"_"+colIx("UOM")]="fixed";
+          issues.push({row:ri,col:colIx("UOM"),level:"fixed",msg:'UOM (row '+(ri+1)+'): "'+rawUom+'" -> "'+mappedU+'"'}); }
+      } else {
+        rec.UOM=uLow;
+        if(uLow!==rawUom){ origin[ri+"_"+colIx("UOM")]=rawUom; flags[ri+"_"+colIx("UOM")]="review"; }
+        issues.push({row:ri,col:colIx("UOM"),level:"review",msg:'UOM (row '+(ri+1)+'): unrecognised "'+rawUom+'" - verify'});
+      }
+    }
+
+    /* Qty */
+    rec.Qty=num(get(ix.qty));
+
+    /* Price_Each = Unit Cost Ex. Tax; default to 0.00 when missing, but flag for review */
+    rec.Price_Each = rawUnitCostFound ? num(get(ix.unitcost)) : null;
+    if(rec.Price_Each===null){
+      rec.Price_Each=0;                       /* default so import doesn't break */
+      priceMissing.push(ri); flags[ri+"_"+colIx("Price_Each")]="review";
+      issues.push({row:ri,col:colIx("Price_Each"),level:"review",msg:"Price_Each (row "+(ri+1)+"): no Unit Cost Ex. Tax found - defaulted to 0.00, check and update"});
+    }
+
+    /* Specification: Allowance when source UOM is Allowance */
+    const allowVal=num(get(ix.allowance));
+    if(uLow==="allowance"){
+      rec.Specification="Allowance"; flags[ri+"_"+colIx("Specification")]="fixed";
+      issues.push({row:ri,col:colIx("Specification"),level:"fixed",msg:'Specification (row '+(ri+1)+'): set to "Allowance" (UOM was Allowance)'});
+    } else if(allowVal && allowVal>0){
+      specSuspect.push(ri); flags[ri+"_"+colIx("Specification")]="review";
+      issues.push({row:ri,col:colIx("Specification"),level:"review",msg:"Specification (row "+(ri+1)+"): Allowance $ present but UOM isn't Allowance - confirm"});
+    }
+
+    /* required blank checks */
+    if(!rec.Item){ flags[ri+"_"+colIx("Item")]="review";
+      issues.push({row:ri,col:colIx("Item"),level:"review",msg:"Item (row "+(ri+1)+"): blank - likely a heading/separator"}); headingRows.push(ri); }
+
+    rows.push(rec);
+  }
+
+  if(dropped) issues.push({row:-1,col:-1,level:"fixed",msg:"Dropped "+dropped+" section-heading / empty row(s) from the source"});
+  if(!rawUnitCostFound) issues.push({row:-1,col:-1,level:"review",msg:'No "Unit Cost Ex. Tax" column found - Price_Each left blank. Check the source headers.'});
+
+  return {rows,flags,issues,origin,dropped,headingRows,specSuspect,priceMissing};
+}
+</script>
+
+<script>
+/* ================= STATE + PIPELINE ================= */
+let STATE={rows:[],flags:{},issues:[],origin:{},headingRows:[],specSuspect:[],priceMissing:[],page:0};
+let WORKBOOK=null, UPLOADED_NAME="", IS_RECHECK=false;
+
+function parseInput(text){
+  const lines=text.replace(/\r\n?/g,"\n").split("\n");
+  while(lines.length && lines[lines.length-1].trim()==="") lines.pop();
+  if(!lines.length) return null;
+  const delim=lines[0].includes("\t")?"\t":",";
+  return lines.map(l=> delim==="\t"?l.split("\t"):splitCSV(l));
+}
+function splitCSV(line){
+  const out=[]; let cur="",inQ=false;
+  for(let i=0;i<line.length;i++){ const c=line[i];
+    if(inQ){ if(c==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else inQ=false; } else cur+=c; }
+    else { if(c==='"') inQ=true; else if(c===","){out.push(cur);cur="";} else cur+=c; } }
+  out.push(cur); return out;
+}
+
+function runCheck(){
+  const catCase=document.getElementById("catcase").value;
+  const parsed=parseInput(document.getElementById("src").value);
+  const checksEl=document.getElementById("checks"), tblEl=document.getElementById("tblwrap");
+  const fail=msg=>{ checksEl.innerHTML='<div class="check error"><span class="stamp">Error</span><div class="msg">'+esc(msg)+'</div></div>';
+    tblEl.innerHTML='<div class="empty"><b>Couldn\u2019t format this</b>'+esc(msg)+'</div>'; };
+  if(!parsed||parsed.length<2){ fail("Nothing to format - paste the Updated Estimate rows or open a file (headers in the first row)."); return; }
+  let res;
+  try{ res=formatRows(parsed,catCase); }
+  catch(err){ fail(err.message); return; }
+  STATE={...res,page:0};
+  try{ render(); }
+  catch(err){ tblEl.innerHTML='<div class="empty"><b>Display error</b>'+esc(String(err&&err.message||err))+'<br>Use Download Excel - your data is intact.</div>'; console.error(err); }
+}
+
+/* ================= RENDER ================= */
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function fmtCell(col,v){
+  if(v===null||v===undefined) return "";
+  if(col==="Price_Each"&&v!=="") { const n=parseFloat(v); return isNaN(n)?String(v):n.toFixed(2); }
+  if(col==="Qty"&&v!=="") { const n=parseFloat(v); return isNaN(n)?String(v):(Math.round(n*1000)/1000); }
+  return String(v);
+}
+function render(){
+  const {rows,flags,issues,origin}=STATE;
+  document.getElementById("tplpill").textContent="Scrase estimate - "+rows.length+" row"+(rows.length!==1?"s":"");
+  document.getElementById("tplpill").classList.add("on");
+  document.getElementById("xlsx").disabled=false;
+
+  const counts={fixed:0,review:0,error:0}; issues.forEach(i=>counts[i.level]++);
+  document.getElementById("summary").innerHTML=
+    (counts.error?'<span class="sum error">'+counts.error+' error'+(counts.error>1?'s':'')+'</span>':'')+
+    (counts.review?'<span class="sum review">'+counts.review+' to review</span>':'')+
+    (counts.fixed?'<span class="sum fixed">'+counts.fixed+' auto-fixed</span>':'')+
+    (!issues.length?'<span class="sum pass">All clear - ready to import</span>':'')+
+    '<span class="pill">'+rows.length+' data row'+(rows.length!==1?'s':'')+'</span>';
+
+  /* action bars */
+  const sb=document.getElementById("specbar");
+  if((STATE.specSuspect||[]).length){ sb.classList.add("show"); document.getElementById("speccount").textContent=STATE.specSuspect.length; }
+  else sb.classList.remove("show");
+  const hb=document.getElementById("headingbar");
+  if((STATE.headingRows||[]).length){ hb.classList.add("show"); document.getElementById("headingcount").textContent=STATE.headingRows.length; }
+  else hb.classList.remove("show");
+  const ub=document.getElementById("uombar");
+  const uomErr=rows.map((r,i)=>i).filter(i=>flags[i+"_"+OUT_COLS.indexOf("UOM")]==="error");
+  if(uomErr.length){ ub.classList.add("show"); document.getElementById("uomcount").textContent=uomErr.length; }
+  else ub.classList.remove("show");
+  const pb=document.getElementById("pricebar");
+  if((STATE.priceMissing||[]).length){ pb.classList.add("show"); document.getElementById("pricecount").textContent=STATE.priceMissing.length; }
+  else pb.classList.remove("show");
+
+  /* table */
+  const wrap=document.getElementById("tblwrap");
+  const headingSet=new Set(STATE.headingRows||[]);
+  const flaggedRow=ri=>{ if(headingSet.has(ri)) return true;
+    for(let c=0;c<OUT_COLS.length;c++){ const f=flags[ri+"_"+c]; if(f==="review"||f==="error") return true; } return false; };
+  const filterOn=(()=>{const f=document.getElementById("rowfilter");return f?f.checked:false;})();
+  const visible=[]; for(let ri=0;ri<rows.length;ri++){ if(!filterOn||flaggedRow(ri)) visible.push(ri); }
+  const fw=document.getElementById("rowfilterwrap");
+  const flaggedCount=rows.map((r,i)=>i).filter(flaggedRow).length;
+  fw.style.display=flaggedCount>0?"inline-flex":"none";
+  const lbl=fw.childNodes[fw.childNodes.length-1]; if(lbl) lbl.textContent=" Show only rows to review/fix ("+flaggedCount+")";
+
+  const PAGE=2000, total=visible.length, pageCount=Math.max(1,Math.ceil(total/PAGE));
+  if(STATE.page>=pageCount) STATE.page=0;
+  const start=STATE.page*PAGE, end=Math.min(total,start+PAGE);
+
+  if(filterOn&&total===0){ wrap.innerHTML='<div class="empty"><b>Nothing to review</b>No rows need attention. Untick the filter to see all rows.</div>'; }
+  else{
+    let html='';
+    if(total>PAGE){
+      html+='<div class="pager">Rows <b>'+(start+1)+'\u2013'+end+'</b> of '+total+
+        ' <button class="btn btn-small" id="pgprev"'+(STATE.page===0?' disabled':'')+'>\u2039 Prev</button>'+
+        '<span class="pgnum">Page '+(STATE.page+1)+' / '+pageCount+'</span>'+
+        '<button class="btn btn-small" id="pgnext"'+(STATE.page>=pageCount-1?' disabled':'')+'>Next \u203a</button></div>';
+    }
+    html+='<div class="tbl-scroll"><table><thead><tr><th></th>';
+    OUT_COLS.forEach(h=>{ html+='<th class="'+(REQUIRED.includes(h)?'req':'')+'">'+esc(h)+'</th>'; });
+    html+='</tr></thead><tbody>';
+    for(let vi=start;vi<end;vi++){
+      const ri=visible[vi], rec=rows[ri], isH=headingSet.has(ri);
+      html+='<tr'+(isH?' class="heading-row"':'')+'><td class="rownum">'+(ri+1)+
+        (isH?' <button class="delrow" data-del="'+ri+'" title="Delete this row">\u2715</button>':'')+'</td>';
+      OUT_COLS.forEach((col,ci)=>{
+        const flag=flags[ri+"_"+ci], was=origin[ri+"_"+ci];
+        html+='<td contenteditable spellcheck="false" data-r="'+ri+'" data-c="'+ci+'" class="'+(flag?'c-'+flag:'')+'" title="'+(was?'was: '+esc(was):'')+'">'+
+          (was?'<span class="was">'+esc(was)+'</span>':'')+esc(fmtCell(col,rec[col]))+'</td>';
+      });
+      html+='</tr>';
+    }
+    html+='</tbody></table></div>';
+    wrap.innerHTML=html;
+    const pgp=document.getElementById("pgprev"),pgn=document.getElementById("pgnext");
+    if(pgp) pgp.onclick=()=>{STATE.page=Math.max(0,STATE.page-1);render();};
+    if(pgn) pgn.onclick=()=>{STATE.page++;render();};
+  }
+
+  /* inspection card */
+  const cEl=document.getElementById("checks");
+  if(!issues.length){ cEl.innerHTML='<div class="check pass"><span class="stamp">Pass</span><div class="msg">No issues found. Output matches the Scrase / JACK estimate rules.</div></div>'; }
+  else{
+    const order={error:0,review:1,fixed:2};
+    const sorted=[...issues].sort((a,b)=>order[a.level]-order[b.level]);
+    const nE=counts.error,nR=counts.review,nF=counts.fixed;
+    const summary='<div class="checkcount">'+
+      (nE?'<span class="cc cc-err">'+nE+' error'+(nE>1?'s':'')+'</span>':'')+
+      (nR?'<span class="cc cc-rev">'+nR+' to review</span>':'')+
+      (nF?'<span class="cc cc-fix">'+nF+' auto-fixed</span>':'')+'</div>';
+    const cap=150;
+    cEl.innerHTML=summary+sorted.slice(0,cap).map(i=>
+      '<div class="check '+i.level+'"><span class="stamp">'+({fixed:"Fixed",review:"Review",error:"Error"})[i.level]+'</span><div class="msg">'+esc(i.msg)+'</div></div>'
+    ).join("")+(sorted.length>cap?'<div class="footnote">'+(sorted.length-cap)+' more not shown.</div>':'');
+  }
+
+  /* delegated edit + delete */
+  if(!wrap._delegated){
+    wrap._delegated=true;
+    wrap.addEventListener("blur",e=>{
+      const td=e.target;
+      if(td&&td.hasAttribute&&td.hasAttribute("contenteditable")&&td.dataset.r!==undefined){
+        const r=+td.dataset.r,c=+td.dataset.c,col=OUT_COLS[c];
+        const wasEl=td.querySelector(".was");
+        const txt=(wasEl?td.textContent.replace(wasEl.textContent,""):td.textContent).trim();
+        if(STATE.rows[r]) STATE.rows[r][col]= (col==="Qty"||col==="Price_Each") ? (txt===""?null:txt) : txt;
+      }
+    },true);
+    wrap.addEventListener("click",e=>{
+      const btn=e.target.closest&&e.target.closest(".delrow");
+      if(btn){ const idx=+btn.dataset.del;
+        const sc=wrap.querySelector(".tbl-scroll"); const top=sc?sc.scrollTop:0,left=sc?sc.scrollLeft:0;
+        STATE.rows.splice(idx,1); reindex(); render();
+        const ns=document.getElementById("tblwrap").querySelector(".tbl-scroll"); if(ns){ns.scrollTop=top;ns.scrollLeft=left;}
+        toast("Row deleted");
+      }
+    });
+  }
+}
+
+/* after a structural change (delete/edit), rebuild flags/issues from current rows */
+function reindex(){
+  const rows=STATE.rows;
+  const tsv=[OUT_COLS.join("\t"),...rows.map(r=>OUT_COLS.map(c=>{const v=r[c];return v==null?"":String(v);}).join("\t"))].join("\n");
+  /* re-run through the formatter so counts/flags stay in sync (source cols == output cols now) */
+  const parsed=parseInput(tsv);
+  /* build a pseudo source using output columns; map them so formatRows recognises them */
+  const header=parsed[0];
+  /* rename output-style headers to source-style for the resolver: Item stays, Cost_Category stays,
+     Cost_Group present (blank), Type/Qty/UOM stay, Price_Each -> treated as unit cost */
+  const remap=header.map(h=> h==="Price_Each" ? "Unit Cost Ex. Tax" : h);
+  parsed[0]=remap;
+  try{
+    const res=formatRows(parsed, document.getElementById("catcase").value);
+    /* keep Cost_Category as-is (already stripped) by not re-stripping: formatRows strips a leading
+       "NN - " code, but our stored categories no longer have codes, so they pass through unchanged */
+    STATE={...res,page:STATE.page};
+  }catch(err){ /* keep existing STATE if reindex fails */ }
+}
+
+/* ================= ACTIONS ================= */
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1700);}
+document.getElementById("run").addEventListener("click",runCheck);
+document.getElementById("catcase").addEventListener("change",()=>{ if(document.getElementById("src").value.trim()){ runCheck(); } });
+document.getElementById("rowfilter").addEventListener("change",()=>{ if(STATE.rows.length){ STATE.page=0; render(); } });
+document.getElementById("src").addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="Enter") runCheck(); });
+
+document.getElementById("setallow").addEventListener("click",()=>{
+  const c=OUT_COLS.indexOf("Specification");
+  (STATE.specSuspect||[]).forEach(ri=>{ if(STATE.rows[ri]){ STATE.rows[ri].Specification="Allowance"; STATE.flags[ri+"_"+c]="fixed"; }});
+  STATE.specSuspect=[]; render(); toast("Specification set to Allowance");
+});
+document.getElementById("moveuom").addEventListener("click",()=>{
+  const uc=OUT_COLS.indexOf("UOM"), pc=OUT_COLS.indexOf("Price_Each");
+  let n=0;
+  STATE.rows.forEach((r,ri)=>{
+    if(STATE.flags[ri+"_"+uc]==="error"){
+      const v=r.UOM; if((r.Price_Each==null||r.Price_Each==="")){ r.Price_Each=num(v); r.UOM=""; STATE.flags[ri+"_"+pc]="fixed"; delete STATE.flags[ri+"_"+uc]; n++; }
+    }
+  });
+  reindex(); render(); toast(n+" value(s) moved to Price_Each");
+});
+document.getElementById("delheadings").addEventListener("click",()=>{
+  const hr=(STATE.headingRows||[]).slice().sort((a,b)=>b-a);
+  hr.forEach(i=>STATE.rows.splice(i,1)); const n=hr.length;
+  reindex(); render(); toast(n+" row(s) deleted");
+});
+document.getElementById("reset").addEventListener("click",()=>{
+  document.getElementById("src").value="";
+  const fi=document.getElementById("file"); if(fi) fi.value="";
+  document.getElementById("sheetrow").style.display="none";
+  const ss=document.getElementById("sheet"); if(ss) ss.innerHTML="";
+  WORKBOOK=null; UPLOADED_NAME="";
+  STATE={rows:[],flags:{},issues:[],origin:{},headingRows:[],specSuspect:[],priceMissing:[],page:0};
+  document.getElementById("tblwrap").innerHTML='<div class="empty"><b>Nothing checked yet</b>Load your estimate above and hit Check and Format.<br>Result cells are editable. Changed cells show the old value crossed out.</div>';
+  document.getElementById("summary").innerHTML="";
+  document.getElementById("checks").innerHTML='<div class="footnote">Run a check to see results here. Fixed = corrected automatically. Review = look at it yourself. Error = must be resolved before import.</div>';
+  ["specbar","headingbar","uombar","pricebar"].forEach(id=>document.getElementById(id).classList.remove("show"));
+  document.getElementById("rowfilterwrap").style.display="none";
+  document.getElementById("rowfilter").checked=false;
+  document.getElementById("xlsx").disabled=true;
+  document.getElementById("tplpill").textContent="Scrase estimate";
+  document.getElementById("tplpill").classList.remove("on");
+  document.getElementById("src").focus(); toast("Cleared");
+});
+
+/* ================= EXCEL EXPORT (error cells stay red) ================= */
+function buildSheet(rows,flagAt){
+  const fmts={Qty:"0.000",Price_Each:"0.00"};
+  const aoa=[OUT_COLS,...rows.map(r=>OUT_COLS.map(c=>{const v=r[c];return v==null?"":v;}))];
+  const ws={}; const range={s:{r:0,c:0},e:{r:Math.max(0,aoa.length-1),c:OUT_COLS.length-1}};
+  const RED={patternType:"solid",fgColor:{rgb:"FFC0392B"},bgColor:{rgb:"FFC0392B"}}, WB={color:{rgb:"FFFFFFFF"},bold:true};
+  aoa.forEach((row,r)=>{ row.forEach((val,c)=>{
+    const addr=XLSX.utils.encode_cell({r,c}); const col=OUT_COLS[c]; const raw=(val==null)?"":String(val);
+    if(r===0){ ws[addr]={t:"s",v:raw}; return; }
+    let cell;
+    if(fmts[col] && raw.trim()!=="" && !isNaN(parseFloat(raw.replace(/[$,\s]/g,"")))){ cell={t:"n",v:parseFloat(raw.replace(/[$,\s]/g,"")),z:fmts[col]}; }
+    else cell={t:"s",v:raw};
+    if(flagAt && flagAt(r-1,c)==="error"){ cell.s={fill:RED,font:WB}; }
+    ws[addr]=cell;
+  }); });
+  ws["!ref"]=XLSX.utils.encode_range(range);
+  ws["!cols"]=[{wch:11},{wch:30},{wch:60},{wch:14},{wch:14},{wch:8},{wch:9},{wch:12},{wch:8}];
+  return ws;
+}
+document.getElementById("xlsx").addEventListener("click",()=>{
+  const base=UPLOADED_NAME||"Scrase-estimate";
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildSheet(STATE.rows,(r,c)=>STATE.flags[r+"_"+c]), "Formatting");
+  XLSX.writeFile(wb, base+" - JACK Estimate.xlsx");
+  toast("Downloaded - Formatting sheet ready to import");
+});
+
+/* ================= FILE LOAD ================= */
+function sheetTSV(ws){
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:"dd/mm/yyyy",blankrows:false,defval:""});
+  return aoa.map(row=>row.map(c=>String(c==null?"":c).replace(/[\t\r\n]+/g," ").trim()).join("\t")).join("\n");
+}
+function loadSheet(name){ document.getElementById("src").value=sheetTSV(WORKBOOK.Sheets[name]); }
+document.getElementById("file").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return;
+  UPLOADED_NAME=f.name.replace(/\.[^.]+$/,"");
+  const rd=new FileReader();
+  if(/\.(xlsx|xlsm|xls)$/i.test(f.name)){
+    rd.onload=()=>{
+      try{ WORKBOOK=XLSX.read(rd.result,{type:"array",cellDates:true}); }
+      catch(err){ toast("Could not read that Excel file"); return; }
+      const names=WORKBOOK.SheetNames, sel=document.getElementById("sheet");
+      sel.innerHTML=""; names.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;sel.appendChild(o);});
+      document.getElementById("sheetrow").style.display=names.length>1?"block":"none";
+      /* prefer a sheet named like "Updated Estimate" (the source), not "Formatting" */
+      let pick=names.find(n=>/updated\s*esti/i.test(n)) || names.find(n=>/esti/i.test(n)&&!/format/i.test(n)) || names[0];
+      sel.value=pick; loadSheet(pick);
+      toast(names.length>1?'Loaded "'+pick+'" - change sheet if needed, then Check and Format':'File loaded - hit Check and Format');
+    };
+    rd.readAsArrayBuffer(f);
+  } else {
+    rd.onload=()=>{ document.getElementById("src").value=rd.result; document.getElementById("sheetrow").style.display="none"; toast("File loaded - hit Check and Format"); };
+    rd.readAsText(f);
+  }
+});
+document.getElementById("sheet").addEventListener("change",e=>{ loadSheet(e.target.value); toast('Loaded "'+e.target.value+'"'); if(STATE.rows.length) runCheck(); });
+</script>
+</body>
+</html>
