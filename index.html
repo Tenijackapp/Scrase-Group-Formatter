@@ -191,6 +191,9 @@ Preliminary Design Drawings	01 - Preliminaries & Approvals	01-001	Fee	1	Quoted	.
     <h2><span class="step">3</span> Formatted output</h2>
     <div class="summary" id="summary"></div>
 
+    <div class="phasebar info" id="markupbar">
+      <span id="markupmsg"></span>
+    </div>
     <div class="phasebar" id="specbar">
       <span>⚠ <b id="speccount"></b> row(s) have an <b>Allowance $</b> amount but UOM isn't "Allowance". Confirm whether Specification should read "Allowance".</span>
       <button class="btn btn-small btn-fix" id="setallow">Set those to Allowance</button>
@@ -304,7 +307,8 @@ function buildIndex(header){
     qty:       pick("qty","quantity"),
     uom:       pick("uom","unit","units"),
     allowance: pick("allowance"),
-    unitcost:  pick("unitcostextax","unitcostexgst","unitcost","priceeach","rate")
+    unitcost:  pick("unitcostextax","unitcostexgst","unitcost","priceeach","rate"),
+    markup:    pick("markup","markuppercent","margin")
   };
 }
 
@@ -321,6 +325,7 @@ function formatRows(aoa, catCase){
   const colIx=c=>OUT_COLS.indexOf(c);
   const rows=[]; let dropped=0; const headingRows=[]; const specSuspect=[]; const priceMissing=[];
   const rawUnitCostFound = ix.unitcost>=0;
+  const markupVals=[];       /* normalised markup % per kept row (e.g. 25 for 25%), or null */
 
   for(let r=1;r<aoa.length;r++){
     const row=aoa[r]||[];
@@ -401,6 +406,23 @@ function formatRows(aoa, catCase){
       issues.push({row:ri,col:colIx("Specification"),level:"review",msg:"Specification (row "+(ri+1)+"): Allowance $ present but UOM isn't Allowance - confirm"});
     }
 
+    /* Markup: read source Markup % (stored as a decimal like 0.25 or a number like 25 / "25%").
+       Normalise to a whole-number percent for comparison; write per-line only if the file is mixed. */
+    let mk=null;
+    if(ix.markup>=0){
+      const raw=get(ix.markup).trim();
+      if(raw!==""){
+        let n=parseFloat(raw.replace(/[%\s,]/g,""));
+        if(!isNaN(n)){
+          if(/%/.test(raw)) mk=n;            /* "25%" -> 25 */
+          else if(n>0 && n<=1) mk=n*100;      /* 0.25   -> 25 (decimal fraction) */
+          else mk=n;                          /* 25     -> 25 */
+          mk=Math.round(mk*100)/100;          /* tidy to 2dp */
+        }
+      }
+    }
+    markupVals.push(mk);
+
     /* required blank checks */
     if(!rec.Item){ flags[ri+"_"+colIx("Item")]="review";
       issues.push({row:ri,col:colIx("Item"),level:"review",msg:"Item (row "+(ri+1)+"): blank - likely a heading/separator"}); headingRows.push(ri); }
@@ -411,7 +433,29 @@ function formatRows(aoa, catCase){
   if(dropped) issues.push({row:-1,col:-1,level:"fixed",msg:"Dropped "+dropped+" section-heading / empty row(s) from the source"});
   if(!rawUnitCostFound) issues.push({row:-1,col:-1,level:"review",msg:'No "Unit Cost Ex. Tax" column found - Price_Each left blank. Check the source headers.'});
 
-  return {rows,flags,issues,origin,dropped,headingRows,specSuspect,priceMissing};
+  /* ---- Markup: uniform vs mixed ---- */
+  let markupInfo=null;
+  const mkColIx=OUT_COLS.indexOf("Markup");
+  const present=markupVals.filter(v=>v!==null);
+  const fmtPct=n=>{ const x=Math.round(n*100)/100; return (x===Math.round(x))?String(Math.round(x)):String(x); };
+  if(present.length){
+    const distinct=[...new Set(present)];
+    const uniform = distinct.length===1;
+    if(uniform){
+      markupInfo={uniform:true, pct:fmtPct(distinct[0])};
+      issues.push({row:-1,col:-1,level:"review",msg:"Markup is uniform across all lines: "+fmtPct(distinct[0])+"%. Leave the Markup column blank and enter "+fmtPct(distinct[0])+"% as the global markup in the JACK App."});
+    } else {
+      markupInfo={uniform:false, count:distinct.length};
+      let written=0;
+      rows.forEach((rec,ri)=>{
+        const v=markupVals[ri];
+        if(v!==null){ rec.Markup=fmtPct(v); flags[ri+"_"+mkColIx]="fixed"; written++; }
+      });
+      issues.push({row:-1,col:-1,level:"fixed",msg:"Markup varies per line ("+distinct.length+" different values) - written into the Markup column for "+written+" row(s). Do not set a global markup in JACK for this estimate."});
+    }
+  }
+
+  return {rows,flags,issues,origin,dropped,headingRows,specSuspect,priceMissing,markupInfo};
 }
 </script>
 
@@ -473,6 +517,18 @@ function render(){
     '<span class="pill">'+rows.length+' data row'+(rows.length!==1?'s':'')+'</span>';
 
   /* action bars */
+  const mkbar=document.getElementById("markupbar");
+  const mi=STATE.markupInfo;
+  if(mi && mi.uniform && mi.pct!=null){
+    mkbar.classList.add("show");
+    document.getElementById("markupmsg").innerHTML=
+      '\u2713 All lines use the same markup: <b>'+mi.pct+'%</b>. The Markup column is left blank - enter <b>'+mi.pct+'%</b> as the global markup in the JACK App.';
+  } else if(mi && !mi.uniform){
+    mkbar.classList.add("show");
+    document.getElementById("markupmsg").innerHTML=
+      '\u2713 Markup varies per line ('+mi.count+' different values) - each line\u2019s markup is written into the <b>Markup</b> column. Do <b>not</b> set a global markup in JACK for this estimate.';
+  } else mkbar.classList.remove("show");
+
   const sb=document.getElementById("specbar");
   if((STATE.specSuspect||[]).length){ sb.classList.add("show"); document.getElementById("speccount").textContent=STATE.specSuspect.length; }
   else sb.classList.remove("show");
@@ -642,7 +698,7 @@ document.getElementById("reset").addEventListener("click",()=>{
 
 /* ================= EXCEL EXPORT (error cells stay red) ================= */
 function buildSheet(rows,flagAt){
-  const fmts={Qty:"0.000",Price_Each:"0.00"};
+  const fmts={Qty:"0.000",Price_Each:"0.00",Markup:"General"};
   const aoa=[OUT_COLS,...rows.map(r=>OUT_COLS.map(c=>{const v=r[c];return v==null?"":v;}))];
   const ws={}; const range={s:{r:0,c:0},e:{r:Math.max(0,aoa.length-1),c:OUT_COLS.length-1}};
   const RED={patternType:"solid",fgColor:{rgb:"FFC0392B"},bgColor:{rgb:"FFC0392B"}}, WB={color:{rgb:"FFFFFFFF"},bold:true};
