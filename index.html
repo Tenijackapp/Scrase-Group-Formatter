@@ -690,12 +690,13 @@ document.getElementById("reset").addEventListener("click",()=>{
   document.getElementById("tblwrap").innerHTML='<div class="empty"><b>Nothing checked yet</b>Load your estimate above and hit Check and Format.<br>Result cells are editable. Changed cells show the old value crossed out.</div>';
   document.getElementById("summary").innerHTML="";
   document.getElementById("checks").innerHTML='<div class="footnote">Run a check to see results here. Fixed = corrected automatically. Review = look at it yourself. Error = must be resolved before import.</div>';
-  ["specbar","headingbar","uombar","pricebar"].forEach(id=>document.getElementById(id).classList.remove("show"));
+  ["markupbar","specbar","headingbar","uombar","pricebar"].forEach(id=>document.getElementById(id).classList.remove("show"));
   document.getElementById("rowfilterwrap").style.display="none";
   document.getElementById("rowfilter").checked=false;
   document.getElementById("xlsx").disabled=true;
   document.getElementById("tplpill").textContent="Scrase estimate";
   document.getElementById("tplpill").classList.remove("on");
+  const cc=document.getElementById("catcase"); if(cc) cc.value="proper";
   document.getElementById("src").focus(); toast("Cleared");
 });
 
